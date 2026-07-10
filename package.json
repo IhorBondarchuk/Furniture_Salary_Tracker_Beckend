@@ -1,0 +1,27 @@
+{
+  "name": "furniture_salary_tracker_beckend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IhorBondarchuk/Furniture_Salary_Tracker_Beckend.git"
+  },
+  "keywords": [],
+  "author": "Ihor Bondarchuk <igor.bondarchuk.1511@gmail.com>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/IhorBondarchuk/Furniture_Salary_Tracker_Beckend/issues"
+  },
+  "homepage": "https://github.com/IhorBondarchuk/Furniture_Salary_Tracker_Beckend#readme",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.6.0",
+    "globals": "^17.7.0",
+    "nodemon": "^3.1.14"
+  }
+}
