@@ -2,6 +2,11 @@ import { Schema, model } from 'mongoose';
 
 const userSchema = new Schema(
   {
+    name: {
+      type: String,
+      required: [true, "Name is required"],
+      trim: true,
+    },
     email: {
       type: String,
       required: [true, 'Email is required'],
@@ -16,10 +21,19 @@ const userSchema = new Schema(
     },
     role: {
       type: String,
-      enum: ['user', 'admin'],
-      default: 'user',
+      enum: ['worker', 'admin'],
+      default: 'worker',
     },
-    token: {
+    hourlyBonus: {
+      type: Number,
+      default: 0,
+      min: [0, 'Hourly bonus cannot be negative'],
+    },
+    accessToken: {
+      type: String,
+      default: null,
+    },
+    refreshToken: {
       type: String,
       default: null,
     },
