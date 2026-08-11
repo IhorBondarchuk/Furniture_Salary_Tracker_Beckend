@@ -12,8 +12,12 @@ import { errorHandler } from './middlewares/errorHandler.js';
 
 const app = express();
 
+// FRONTEND_URL restricts CORS to the deployed frontend in production;
+// without it (e.g. local dev) any origin is reflected back.
+const { FRONTEND_URL } = process.env;
+
 app.use(morgan('tiny'));
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({ origin: FRONTEND_URL || true, credentials: true }));
 app.use(cookieParser());
 app.use(express.json());
 
