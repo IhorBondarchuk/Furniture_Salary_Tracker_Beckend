@@ -17,9 +17,9 @@ export const validateQuery = schema => {
     if (error) {
       return next(new HttpError(400, error.message));
     }
-    // Express 5 exposes req.query as a getter-only property, so mutate
-    // in place instead of reassigning.
-    Object.assign(req.query, value);
+    // Express 5 re-parses req.query from the URL on every access, so the
+    // validated/converted values can't be written back — expose them separately.
+    req.validatedQuery = value;
     next();
   };
 };

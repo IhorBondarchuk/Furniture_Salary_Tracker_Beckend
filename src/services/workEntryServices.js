@@ -1,7 +1,17 @@
 import { Types } from 'mongoose';
 import { WorkEntry } from '../models/workEntry.js';
 import { Furniture } from '../models/furniture.js';
+import { User } from '../models/user.js';
 import { HttpError } from '../utils/HttpError.js';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const ensureFurnitureExists = async id => {
+  if (!(await Furniture.exists({ _id: id }))) {
+    throw new HttpError(404, 'Furniture not found');
+  }
+};
 
 export const listWorkEntries = filter => {
   return WorkEntry.find(filter).populate('furniture', 'name price').sort({ date: -1 });
@@ -16,14 +26,17 @@ export const getWorkEntryById = async id => {
 };
 
 export const createWorkEntry = async payload => {
-  const furniture = await Furniture.findById(payload.furniture);
-  if (!furniture) {
-    throw new HttpError(404, 'Furniture not found');
+  await ensureFurnitureExists(payload.furniture);
+  if (!(await User.exists({ _id: payload.worker }))) {
+    throw new HttpError(404, 'Worker not found');
   }
   return WorkEntry.create(payload);
 };
 
 export const updateWorkEntry = async (id, payload) => {
+  if (payload.furniture) {
+    await ensureFurnitureExists(payload.furniture);
+  }
   const entry = await WorkEntry.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
@@ -46,9 +59,14 @@ export const deleteWorkEntry = async id => {
 // *current* catalog price. There is no price snapshot on the work entry
 // itself, so a $lookup joins each entry to the live catalog price.
 export const calculateSalary = async ({ worker, from, to }) => {
+  // a date-only `to` covers that whole day, not just its first millisecond
+  const dateFilter = DATE_ONLY_RE.test(to)
+    ? { $gte: new Date(from), $lt: new Date(new Date(to).getTime() + DAY_MS) }
+    : { $gte: new Date(from), $lte: new Date(to) };
+
   const matchStage = {
     worker: new Types.ObjectId(worker),
-    date: { $gte: new Date(from), $lte: new Date(to) },
+    date: dateFilter,
   };
 
   const items = await WorkEntry.aggregate([
