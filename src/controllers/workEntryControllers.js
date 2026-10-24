@@ -10,7 +10,8 @@ const getAll = async (req, res) => {
       ? {}
       : { worker: req.user._id };
 
-  const entries = await workEntryServices.listWorkEntries(filter);
+  const { from, to } = req.validatedQuery;
+  const entries = await workEntryServices.listWorkEntries(filter, { from, to });
   res.json(entries);
 };
 

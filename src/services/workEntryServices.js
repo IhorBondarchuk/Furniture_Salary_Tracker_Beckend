@@ -13,8 +13,31 @@ const ensureFurnitureExists = async id => {
   }
 };
 
-export const listWorkEntries = filter => {
-  return WorkEntry.find(filter).populate('furniture', 'name price').sort({ date: -1 });
+// a date-only `to` covers that whole day, not just its first millisecond
+const buildDateFilter = ({ from, to }) => {
+  const dateFilter = {};
+  if (from) {
+    dateFilter.$gte = new Date(from);
+  }
+  if (to) {
+    if (DATE_ONLY_RE.test(to)) {
+      dateFilter.$lt = new Date(new Date(to).getTime() + DAY_MS);
+    } else {
+      dateFilter.$lte = new Date(to);
+    }
+  }
+  return dateFilter;
+};
+
+export const listWorkEntries = (filter, { from, to } = {}) => {
+  const query = { ...filter };
+  if (from || to) {
+    query.date = buildDateFilter({ from, to });
+  }
+  return WorkEntry.find(query)
+    .populate('worker', 'name')
+    .populate('furniture', 'name price')
+    .sort({ date: -1 });
 };
 
 export const getWorkEntryById = async id => {
@@ -59,14 +82,9 @@ export const deleteWorkEntry = async id => {
 // *current* catalog price. There is no price snapshot on the work entry
 // itself, so a $lookup joins each entry to the live catalog price.
 export const calculateSalary = async ({ worker, from, to }) => {
-  // a date-only `to` covers that whole day, not just its first millisecond
-  const dateFilter = DATE_ONLY_RE.test(to)
-    ? { $gte: new Date(from), $lt: new Date(new Date(to).getTime() + DAY_MS) }
-    : { $gte: new Date(from), $lte: new Date(to) };
-
   const matchStage = {
     worker: new Types.ObjectId(worker),
-    date: dateFilter,
+    date: buildDateFilter({ from, to }),
   };
 
   const items = await WorkEntry.aggregate([

@@ -13,12 +13,18 @@ export const updateWorkEntrySchema = Joi.object({
   date: Joi.date().iso(),
 }).min(1);
 
-export const listQuerySchema = Joi.object({
-  worker: Joi.string().hex().length(24),
-});
-
 // raw() keeps the original strings so the service can tell a date-only
 // `to` (YYYY-MM-DD, inclusive of the whole day) from a full timestamp.
+export const listQuerySchema = Joi.object({
+  worker: Joi.string().hex().length(24),
+  from: Joi.date().iso().raw(),
+  to: Joi.when('from', {
+    is: Joi.exist(),
+    then: Joi.date().iso().min(Joi.ref('from')).raw(),
+    otherwise: Joi.date().iso().raw(),
+  }),
+});
+
 export const salaryQuerySchema = Joi.object({
   worker: Joi.string().hex().length(24),
   from: Joi.date().iso().raw().required(),
