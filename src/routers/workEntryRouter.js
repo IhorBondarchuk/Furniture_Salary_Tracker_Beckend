@@ -6,6 +6,7 @@ import { validateBody, validateQuery } from '../middlewares/validateBody.js';
 import {
   createWorkEntrySchema,
   updateWorkEntrySchema,
+  listQuerySchema,
   salaryQuerySchema,
 } from '../schemas/workEntrySchemas.js';
 
@@ -15,7 +16,7 @@ workEntryRouter.use(authenticate);
 
 workEntryRouter.get('/salary', validateQuery(salaryQuerySchema), workEntryControllers.getSalary);
 
-workEntryRouter.get('/', workEntryControllers.getAll);
+workEntryRouter.get('/', validateQuery(listQuerySchema), workEntryControllers.getAll);
 workEntryRouter.get('/:id', isValidId, workEntryControllers.getById);
 
 workEntryRouter.post(

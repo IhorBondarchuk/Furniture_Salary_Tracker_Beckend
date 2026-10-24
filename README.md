@@ -5,6 +5,26 @@ Backend для обліку зарплати робітників, які зби
 збірки з'єднуються (`$lookup`) з поточним каталогом цін — без snapshot
 ціни на момент запису.
 
+## Деплой
+
+API: https://furniture-salary-tracker-beckend.onrender.com/api
+
+Змінні середовища на Render (Environment):
+
+| Змінна               | Значення                                                        |
+| -------------------- | --------------------------------------------------------------- |
+| `DB_HOST`            | рядок підключення MongoDB Atlas                                 |
+| `JWT_SECRET`         | довгий випадковий рядок                                         |
+| `JWT_REFRESH_SECRET` | інший довгий випадковий рядок                                   |
+| `NODE_ENV`           | `production` — вмикає `secure` + `sameSite=none` для cookie     |
+| `FRONTEND_URL`       | origin фронтенду без `/` в кінці, напр. `https://….vercel.app`  |
+
+Без `FRONTEND_URL` у production сервер не стартує (інакше CORS з
+`credentials` пускав би будь-який сайт). `PORT` Render задає сам.
+
+Free-інстанс Render засинає без трафіку — перший запит після простою
+може йти ~50 с.
+
 ## Стек
 
 - Node.js + Express 5 (ES modules)
@@ -92,7 +112,7 @@ src/
 
 | Метод  | Шлях       | Доступ | Опис                                                     |
 | ------ | ---------- | ------ | --------------------------------------------------------- |
-| GET    | `/`        | worker бачить лише свої, admin — всі (або `?worker=<id>`) | список записів |
+| GET    | `/`        | worker бачить лише свої, admin — всі (або `?worker=<id>`) | список записів, опційно `?from=&to=`; `worker` і `furniture` populated (`{ _id, name }` / `{ _id, name, price }`) |
 | GET    | `/:id`     | власник запису або admin | один запис                                  |
 | POST   | `/`        | автентифікований | створити запис (admin може вказати `worker`)         |
 | PATCH  | `/:id`     | власник або admin | оновити запис                                        |

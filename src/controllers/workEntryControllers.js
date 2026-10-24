@@ -4,13 +4,14 @@ import * as workEntryServices from '../services/workEntryServices.js';
 
 const getAll = async (req, res) => {
   // workers only ever see their own entries; admins may filter by ?worker=
-  const filter = req.user.role === 'admin' && req.query.worker
-    ? { worker: req.query.worker }
+  const filter = req.user.role === 'admin' && req.validatedQuery.worker
+    ? { worker: req.validatedQuery.worker }
     : req.user.role === 'admin'
       ? {}
       : { worker: req.user._id };
 
-  const entries = await workEntryServices.listWorkEntries(filter);
+  const { from, to } = req.validatedQuery;
+  const entries = await workEntryServices.listWorkEntries(filter, { from, to });
   res.json(entries);
 };
 
@@ -60,9 +61,9 @@ const remove = async (req, res) => {
 };
 
 const getSalary = async (req, res) => {
-  const { from, to } = req.query;
-  const worker = req.user.role === 'admin' && req.query.worker
-    ? req.query.worker
+  const { from, to } = req.validatedQuery;
+  const worker = req.user.role === 'admin' && req.validatedQuery.worker
+    ? req.validatedQuery.worker
     : req.user._id;
 
   const salary = await workEntryServices.calculateSalary({ worker, from, to });
