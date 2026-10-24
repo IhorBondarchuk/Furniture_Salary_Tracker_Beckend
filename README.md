@@ -18,7 +18,7 @@ API: https://furniture-salary-tracker-beckend.onrender.com/api
 | `JWT_REFRESH_SECRET` | інший довгий випадковий рядок                                   |
 | `NODE_ENV`           | `production` — вмикає `secure` + `sameSite=none` для cookie     |
 | `FRONTEND_URL`       | origin фронтенду без `/` в кінці, напр. `https://….vercel.app`  |
-| `ADMIN_INVITE_CODE`  | секретний код для реєстрації з роллю admin; порожній — вимкнено |
+| `ADMIN_INVITE_CODE`  | секретний код для реєстрації та входу з роллю admin; порожній — реєстрація адміна вимкнена, вхід адміна лише за паролем |
 
 Без `FRONTEND_URL` у production сервер не стартує (інакше CORS з
 `credentials` пускав би будь-який сайт). `PORT` Render задає сам.
@@ -100,7 +100,7 @@ src/
 | Метод | Шлях        | Доступ         | Опис                                   |
 | ----- | ----------- | -------------- | --------------------------------------- |
 | POST  | `/register` | публічний      | реєстрація; `role: "admin"` лише з `adminCode` = `ADMIN_INVITE_CODE`, інакше `worker` |
-| POST  | `/login`    | публічний      | логін, повертає access token + cookie   |
+| POST  | `/login`    | публічний      | логін, повертає access token + cookie; `role` має збігатися з роллю акаунта (за замовчуванням `worker`), для `admin` — ще й `adminCode`, якщо задано `ADMIN_INVITE_CODE` |
 | POST  | `/refresh`  | refresh cookie | видає нову пару токенів                 |
 | POST  | `/logout`   | автентифікований | інвалідує токени                      |
 | GET   | `/current`  | автентифікований | поточний користувач                   |

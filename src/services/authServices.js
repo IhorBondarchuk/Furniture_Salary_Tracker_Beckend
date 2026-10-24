@@ -52,7 +52,22 @@ export const registerUser = async ({ name, email, password, role, adminCode }) =
   return { user, accessToken, refreshToken };
 };
 
-export const loginUser = async ({ email, password }) => {
+// The requested role must match the account. Admin login also requires
+// the admin code while ADMIN_INVITE_CODE is set (without it, admins
+// appointed via `npm run set-role` log in with the password alone).
+const checkLoginRole = (user, role, adminCode) => {
+  if (user.role !== role) {
+    throw new HttpError(
+      403,
+      user.role === 'admin' ? 'This is an admin account' : 'This account is not an admin',
+    );
+  }
+  if (role === 'admin' && ADMIN_INVITE_CODE && !isValidAdminCode(adminCode)) {
+    throw new HttpError(403, 'Invalid admin code');
+  }
+};
+
+export const loginUser = async ({ email, password, role, adminCode }) => {
   const user = await User.findOne({ email });
   if (!user) {
     throw new HttpError(401, 'Email or password is wrong');
@@ -62,6 +77,9 @@ export const loginUser = async ({ email, password }) => {
   if (!passwordCompare) {
     throw new HttpError(401, 'Email or password is wrong');
   }
+
+  // only after the password check, so roles of other accounts don't leak
+  checkLoginRole(user, role, adminCode);
 
   const { accessToken, refreshToken } = generateTokens(user._id);
   user.accessToken = accessToken;
