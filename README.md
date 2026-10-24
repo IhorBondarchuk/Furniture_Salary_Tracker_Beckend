@@ -18,6 +18,7 @@ API: https://furniture-salary-tracker-beckend.onrender.com/api
 | `JWT_REFRESH_SECRET` | інший довгий випадковий рядок                                   |
 | `NODE_ENV`           | `production` — вмикає `secure` + `sameSite=none` для cookie     |
 | `FRONTEND_URL`       | origin фронтенду без `/` в кінці, напр. `https://….vercel.app`  |
+| `ADMIN_INVITE_CODE`  | секретний код для реєстрації з роллю admin; порожній — вимкнено |
 
 Без `FRONTEND_URL` у production сервер не стартує (інакше CORS з
 `credentials` пускав би будь-який сайт). `PORT` Render задає сам.
@@ -63,9 +64,15 @@ Free-інстанс Render засинає без трафіку — перший
    npm start      # production
    ```
 
-Перший обліковий запис має роль `worker` за замовчуванням. Роль `admin`
-призначається вручну (напряму в базі) — self-registration з роллю admin
-навмисно не підтримується.
+Обліковий запис має роль `worker` за замовчуванням. Роль `admin` можна
+отримати при реєстрації, ввівши код із `ADMIN_INVITE_CODE` (без нього
+реєстрація адміна вимкнена), або призначити скриптом (працює з базою з `DB_HOST`):
+
+```bash
+npm run set-role -- user@example.com admin    # або worker, щоб зняти права
+```
+
+Нова роль застосовується після перезавантаження сторінки у фронтенді.
 
 ## Структура
 
@@ -92,7 +99,7 @@ src/
 
 | Метод | Шлях        | Доступ         | Опис                                   |
 | ----- | ----------- | -------------- | --------------------------------------- |
-| POST  | `/register` | публічний      | реєстрація (роль завжди `worker`)       |
+| POST  | `/register` | публічний      | реєстрація; `role: "admin"` лише з `adminCode` = `ADMIN_INVITE_CODE`, інакше `worker` |
 | POST  | `/login`    | публічний      | логін, повертає access token + cookie   |
 | POST  | `/refresh`  | refresh cookie | видає нову пару токенів                 |
 | POST  | `/logout`   | автентифікований | інвалідує токени                      |
