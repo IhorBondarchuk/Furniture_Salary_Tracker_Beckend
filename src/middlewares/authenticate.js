@@ -1,10 +1,7 @@
-import jwt from 'jsonwebtoken';
 import { HttpError } from '../utils/HttpError.js';
-import { User } from '../models/user.js';
+import { verifyToken } from '../services/authServices.js';
 
-const { JWT_SECRET } = process.env;
-
-export const authenticate = async (req, res, next) => {
+export const authenticate = (req, res, next) => {
   const { authorization = '' } = req.headers;
   const [bearer, token] = authorization.split(' ');
 
@@ -13,14 +10,7 @@ export const authenticate = async (req, res, next) => {
   }
 
   try {
-    const { id } = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(id);
-
-    if (!user || !user.accessToken || user.accessToken !== token) {
-      return next(new HttpError(401, 'Not authorized'));
-    }
-
-    req.user = user;
+    verifyToken(token);
     next();
   } catch {
     next(new HttpError(401, 'Not authorized'));

@@ -1,6 +1,8 @@
 # Верстак — Furniture Salary Tracker (Backend)
 
-Backend для обліку зарплати робітників, які збирають меблі. Зарплата за
+Backend для обліку зарплати за збирання меблів. Застосунок
+однокористувацький: реєстрації немає, є один обліковий запис, логін і
+пароль якого задаються змінними середовища. Зарплата за
 період рахується "наживо" через MongoDB aggregation pipeline: записи
 збірки з'єднуються (`$lookup`) з поточним каталогом цін — без snapshot
 ціни на момент запису.
@@ -11,17 +13,17 @@ API: https://furniture-salary-tracker-beckend.onrender.com/api
 
 Змінні середовища на Render (Environment):
 
-| Змінна               | Значення                                                        |
-| -------------------- | --------------------------------------------------------------- |
-| `DB_HOST`            | рядок підключення MongoDB Atlas                                 |
-| `JWT_SECRET`         | довгий випадковий рядок                                         |
-| `JWT_REFRESH_SECRET` | інший довгий випадковий рядок                                   |
-| `NODE_ENV`           | `production` — вмикає `secure` + `sameSite=none` для cookie     |
-| `FRONTEND_URL`       | origin фронтенду без `/` в кінці, напр. `https://….vercel.app`  |
-| `ADMIN_INVITE_CODE`  | секретний код для реєстрації та входу з роллю admin; порожній — реєстрація адміна вимкнена, вхід адміна лише за паролем |
+| Змінна         | Значення                                                          |
+| -------------- | ----------------------------------------------------------------- |
+| `DB_HOST`      | рядок підключення MongoDB Atlas                                   |
+| `APP_LOGIN`    | логін для входу                                                   |
+| `APP_PASSWORD` | пароль для входу                                                  |
+| `JWT_SECRET`   | довгий випадковий рядок для підпису токенів (зміна — вихід на всіх пристроях) |
+| `FRONTEND_URL` | (опційно) origin фронтенду без `/` в кінці — обмежує CORS для браузерів |
 
-Без `FRONTEND_URL` у production сервер не стартує (інакше CORS з
-`credentials` пускав би будь-який сайт). `PORT` Render задає сам.
+Без `APP_LOGIN`, `APP_PASSWORD` або `JWT_SECRET` сервер не стартує.
+`PORT` Render задає сам. `JWT_REFRESH_SECRET`, `ADMIN_INVITE_CODE` і
+`NODE_ENV` більше не використовуються.
 
 Free-інстанс Render засинає без трафіку — перший запит після простою
 може йти ~50 с.
@@ -31,8 +33,7 @@ Free-інстанс Render засинає без трафіку — перший
 - Node.js + Express 5 (ES modules)
 - MongoDB + Mongoose (MongoDB Atlas)
 - Joi — валідація
-- JWT (access + refresh, refresh у HttpOnly cookie)
-- bcryptjs — хешування паролів
+- JWT — токен входу (30 днів), один обліковий запис зі змінних середовища
 
 ## Запуск
 
@@ -47,8 +48,9 @@ Free-інстанс Render засинає без трафіку — перший
    ```
    DB_HOST=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/<db-name>
    PORT=3000
+   APP_LOGIN=...
+   APP_PASSWORD=...
    JWT_SECRET=...
-   JWT_REFRESH_SECRET=...
    ```
 
 3. (Опційно) заповнити каталог меблів 44 позиціями (польські назви):
@@ -64,25 +66,15 @@ Free-інстанс Render засинає без трафіку — перший
    npm start      # production
    ```
 
-Обліковий запис має роль `worker` за замовчуванням. Роль `admin` можна
-отримати при реєстрації, ввівши код із `ADMIN_INVITE_CODE` (без нього
-реєстрація адміна вимкнена), або призначити скриптом (працює з базою з `DB_HOST`):
-
-```bash
-npm run set-role -- user@example.com admin    # або worker, щоб зняти права
-```
-
-Нова роль застосовується після перезавантаження сторінки у фронтенді.
-
 ## Структура
 
 ```
 src/
 ├── controllers/     # обробники запитів (обгорнуті ctrlWrapper)
 ├── routers/         # Express-роутери
-├── models/          # Mongoose-моделі (User, Furniture, WorkEntry)
+├── models/          # Mongoose-моделі (Furniture, WorkEntry)
 ├── services/        # бізнес-логіка / доступ до БД
-├── middlewares/      # authenticate, authorizeRole, validateBody, isValidId, error handlers
+├── middlewares/      # authenticate, loginRateLimit, validateBody, isValidId, error handlers
 ├── schemas/          # Joi-схеми валідації
 ├── utils/
 │   ├── ctrlWrapper.js
@@ -97,40 +89,37 @@ src/
 
 ### Auth — `/api/auth`
 
-| Метод | Шлях        | Доступ         | Опис                                   |
-| ----- | ----------- | -------------- | --------------------------------------- |
-| POST  | `/register` | публічний      | реєстрація; `role: "admin"` лише з `adminCode` = `ADMIN_INVITE_CODE`, інакше `worker` |
-| POST  | `/login`    | публічний      | логін, повертає access token + cookie; `role` має збігатися з роллю акаунта (за замовчуванням `worker`), для `admin` — ще й `adminCode`, якщо задано `ADMIN_INVITE_CODE` |
-| POST  | `/refresh`  | refresh cookie | видає нову пару токенів                 |
-| POST  | `/logout`   | автентифікований | інвалідує токени                      |
-| GET   | `/current`  | автентифікований | поточний користувач                   |
+| Метод | Шлях     | Опис |
+| ----- | -------- | ---- |
+| POST  | `/login` | `{ login, password }` → `{ token }`; після 10 невдалих спроб з однієї IP — 429 на 15 хв |
+
+Решта ендпоінтів вимагає заголовок `Authorization: Bearer <token>`, інакше 401.
 
 ### Furniture — `/api/furniture` (каталог меблів)
 
-| Метод  | Шлях   | Доступ | Опис                     |
-| ------ | ------ | ------ | ------------------------ |
-| GET    | `/`    | будь-який автентифікований | список каталогу |
-| GET    | `/:id` | будь-який автентифікований | одна позиція     |
-| POST   | `/`    | admin  | створити позицію          |
-| PATCH  | `/:id` | admin  | оновити позицію (ціну/назву) |
-| DELETE | `/:id` | admin  | видалити позицію          |
+| Метод  | Шлях   | Опис                         |
+| ------ | ------ | ---------------------------- |
+| GET    | `/`    | список каталогу              |
+| GET    | `/:id` | одна позиція                 |
+| POST   | `/`    | створити позицію             |
+| PATCH  | `/:id` | оновити позицію (ціну/назву) |
+| DELETE | `/:id` | видалити позицію (409, якщо використовується в записах) |
 
 ### Work entries — `/api/work-entries` (записи зборки)
 
-| Метод  | Шлях       | Доступ | Опис                                                     |
-| ------ | ---------- | ------ | --------------------------------------------------------- |
-| GET    | `/`        | worker бачить лише свої, admin — всі (або `?worker=<id>`) | список записів, опційно `?from=&to=`; `worker` і `furniture` populated (`{ _id, name }` / `{ _id, name, price }`) |
-| GET    | `/:id`     | власник запису або admin | один запис                                  |
-| POST   | `/`        | автентифікований | створити запис (admin може вказати `worker`)         |
-| PATCH  | `/:id`     | власник або admin | оновити запис                                        |
-| DELETE | `/:id`     | власник або admin | видалити запис                                       |
-| GET    | `/salary`  | автентифікований | розрахунок зарплати за період, `?from=&to=&worker=` (worker лише для admin) |
+| Метод  | Шлях      | Опис                                                                 |
+| ------ | --------- | -------------------------------------------------------------------- |
+| GET    | `/`       | список записів, опційно `?from=&to=`; `furniture` populated (`{ _id, name, price }`) |
+| GET    | `/:id`    | один запис                                                           |
+| POST   | `/`       | створити запис: `{ furniture, quantity, date? }`                     |
+| PATCH  | `/:id`    | оновити запис                                                        |
+| DELETE | `/:id`    | видалити запис                                                       |
+| GET    | `/salary` | розрахунок зарплати за період, `?from=&to=` (обидва обов'язкові)     |
 
 `GET /api/work-entries/salary?from=2026-08-01&to=2026-08-31` повертає:
 
 ```json
 {
-  "worker": "…",
   "period": { "from": "2026-08-01", "to": "2026-08-31" },
   "items": [
     { "furnitureId": "…", "furnitureName": "Szafa 2-drzwiowa", "price": 45, "quantity": 6, "total": 270 }
