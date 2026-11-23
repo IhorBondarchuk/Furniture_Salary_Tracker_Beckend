@@ -4,6 +4,7 @@ const statusMessages = {
   403: 'Forbidden',
   404: 'Not Found',
   409: 'Conflict',
+  429: 'Too Many Requests',
 };
 
 export class HttpError extends Error {

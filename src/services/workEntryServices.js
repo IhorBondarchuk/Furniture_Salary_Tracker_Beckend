@@ -1,7 +1,5 @@
-import { Types } from 'mongoose';
 import { WorkEntry } from '../models/workEntry.js';
 import { Furniture } from '../models/furniture.js';
-import { User } from '../models/user.js';
 import { HttpError } from '../utils/HttpError.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -29,13 +27,12 @@ const buildDateFilter = ({ from, to }) => {
   return dateFilter;
 };
 
-export const listWorkEntries = (filter, { from, to } = {}) => {
-  const query = { ...filter };
+export const listWorkEntries = ({ from, to } = {}) => {
+  const query = {};
   if (from || to) {
     query.date = buildDateFilter({ from, to });
   }
   return WorkEntry.find(query)
-    .populate('worker', 'name')
     .populate('furniture', 'name price')
     .sort({ date: -1 });
 };
@@ -50,9 +47,6 @@ export const getWorkEntryById = async id => {
 
 export const createWorkEntry = async payload => {
   await ensureFurnitureExists(payload.furniture);
-  if (!(await User.exists({ _id: payload.worker }))) {
-    throw new HttpError(404, 'Worker not found');
-  }
   return WorkEntry.create(payload);
 };
 
@@ -81,9 +75,8 @@ export const deleteWorkEntry = async id => {
 // Salary is calculated on demand: quantity assembled × the furniture's
 // *current* catalog price. There is no price snapshot on the work entry
 // itself, so a $lookup joins each entry to the live catalog price.
-export const calculateSalary = async ({ worker, from, to }) => {
+export const calculateSalary = async ({ from, to }) => {
   const matchStage = {
-    worker: new Types.ObjectId(worker),
     date: buildDateFilter({ from, to }),
   };
 
@@ -130,7 +123,6 @@ export const calculateSalary = async ({ worker, from, to }) => {
   ) / 100;
 
   return {
-    worker,
     period: { from, to },
     items,
     totalSalary,

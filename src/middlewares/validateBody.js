@@ -2,7 +2,9 @@ import { HttpError } from '../utils/HttpError.js';
 
 export const validateBody = schema => {
   return (req, res, next) => {
-    const { error, value } = schema.validate(req.body);
+    // Express 5 leaves req.body undefined when there is no body, and Joi treats
+    // undefined as valid — validate an empty object so required fields are enforced.
+    const { error, value } = schema.validate(req.body ?? {});
     if (error) {
       return next(new HttpError(400, error.message));
     }

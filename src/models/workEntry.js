@@ -2,11 +2,6 @@ import { Schema, model } from 'mongoose';
 
 const workEntrySchema = new Schema(
   {
-    worker: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: [true, 'Worker reference is required'],
-    },
     furniture: {
       type: Schema.Types.ObjectId,
       ref: 'Furniture',

@@ -1,125 +1,33 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/user.js';
 import { HttpError } from '../utils/HttpError.js';
 
-const { JWT_SECRET, JWT_REFRESH_SECRET, ADMIN_INVITE_CODE } = process.env;
+// A single account: credentials live only in the environment, never in the repo.
+const { APP_LOGIN, APP_PASSWORD, JWT_SECRET } = process.env;
+const TOKEN_TTL = '30d';
 
-const ACCESS_TOKEN_TTL = '15m';
-const REFRESH_TOKEN_TTL = '30d';
+// Hashing first gives equal-length buffers, so timingSafeEqual never throws
+// and the comparison doesn't leak the expected length.
+const safeEqual = (a, b) =>
+  timingSafeEqual(
+    createHash('sha256').update(a).digest(),
+    createHash('sha256').update(b).digest(),
+  );
 
-const generateTokens = id => {
-  const accessToken = jwt.sign({ id }, JWT_SECRET, {
-    expiresIn: ACCESS_TOKEN_TTL,
-  });
-  const refreshToken = jwt.sign({ id }, JWT_REFRESH_SECRET, {
-    expiresIn: REFRESH_TOKEN_TTL,
-  });
-  return { accessToken, refreshToken };
-};
-
-// Admin self-registration requires ADMIN_INVITE_CODE; if it isn't set,
-// admins can only be appointed via `npm run set-role`.
-const isValidAdminCode = code => {
-  if (!ADMIN_INVITE_CODE || !code) {
-    return false;
-  }
-  // compare hashes so the check takes the same time regardless of the input
-  const expected = createHash('sha256').update(ADMIN_INVITE_CODE).digest();
-  const actual = createHash('sha256').update(code).digest();
-  return timingSafeEqual(expected, actual);
-};
-
-export const registerUser = async ({ name, email, password, role, adminCode }) => {
-  if (role === 'admin' && !isValidAdminCode(adminCode)) {
-    throw new HttpError(403, 'Invalid admin code');
-  }
-
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
-    throw new HttpError(409, 'Email already in use');
-  }
-
-  const hashPassword = await bcrypt.hash(password, 10);
-  const user = await User.create({ name, email, password: hashPassword, role });
-
-  const { accessToken, refreshToken } = generateTokens(user._id);
-  user.accessToken = accessToken;
-  user.refreshToken = refreshToken;
-  await user.save();
-
-  return { user, accessToken, refreshToken };
-};
-
-// The requested role must match the account. Admin login also requires
-// the admin code while ADMIN_INVITE_CODE is set (without it, admins
-// appointed via `npm run set-role` log in with the password alone).
-const checkLoginRole = (user, role, adminCode) => {
-  if (user.role !== role) {
-    throw new HttpError(
-      403,
-      user.role === 'admin' ? 'This is an admin account' : 'This account is not an admin',
-    );
-  }
-  if (role === 'admin' && ADMIN_INVITE_CODE && !isValidAdminCode(adminCode)) {
-    throw new HttpError(403, 'Invalid admin code');
+export const assertAuthConfigured = () => {
+  if (!APP_LOGIN || !APP_PASSWORD || !JWT_SECRET) {
+    throw new Error('APP_LOGIN, APP_PASSWORD and JWT_SECRET must be set');
   }
 };
 
-export const loginUser = async ({ email, password, role, adminCode }) => {
-  const user = await User.findOne({ email });
-  if (!user) {
-    throw new HttpError(401, 'Email or password is wrong');
+export const login = ({ login, password }) => {
+  // evaluate both so a wrong login takes as long as a wrong password
+  const loginOk = safeEqual(login, APP_LOGIN);
+  const passwordOk = safeEqual(password, APP_PASSWORD);
+  if (!loginOk || !passwordOk) {
+    throw new HttpError(401, 'Wrong login or password');
   }
-
-  const passwordCompare = await bcrypt.compare(password, user.password);
-  if (!passwordCompare) {
-    throw new HttpError(401, 'Email or password is wrong');
-  }
-
-  // only after the password check, so roles of other accounts don't leak
-  checkLoginRole(user, role, adminCode);
-
-  const { accessToken, refreshToken } = generateTokens(user._id);
-  user.accessToken = accessToken;
-  user.refreshToken = refreshToken;
-  await user.save();
-
-  return { user, accessToken, refreshToken };
+  return { token: jwt.sign({ sub: APP_LOGIN }, JWT_SECRET, { expiresIn: TOKEN_TTL }) };
 };
 
-export const refreshUserTokens = async token => {
-  if (!token) {
-    throw new HttpError(401, 'Not authorized');
-  }
-
-  let payload;
-  try {
-    payload = jwt.verify(token, JWT_REFRESH_SECRET);
-  } catch {
-    throw new HttpError(401, 'Not authorized');
-  }
-
-  const user = await User.findById(payload.id);
-  if (!user || user.refreshToken !== token) {
-    throw new HttpError(401, 'Not authorized');
-  }
-
-  const { accessToken, refreshToken } = generateTokens(user._id);
-  user.accessToken = accessToken;
-  user.refreshToken = refreshToken;
-  await user.save();
-
-  return { user, accessToken, refreshToken };
-};
-
-export const logoutUser = async id => {
-  const user = await User.findByIdAndUpdate(id, {
-    accessToken: null,
-    refreshToken: null,
-  });
-  if (!user) {
-    throw new HttpError(401, 'Not authorized');
-  }
-};
+export const verifyToken = token => jwt.verify(token, JWT_SECRET);
